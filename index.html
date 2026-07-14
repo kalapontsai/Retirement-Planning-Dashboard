@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>專業版退休財務規劃 Dashboard</title>
+    <title>退休財務規劃 Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -12,7 +12,7 @@
             --success: #16a34a;
             --warning: #ca8a04;
             --danger: #dc2626;
-            --mc-color: #8b5cf6; /* 蒙地卡羅專屬紫色 */
+            --mc-color: #8b5cf6;
             --bg-color: #f8fafc;
             --card-bg: #ffffff;
             --text-main: #1e293b;
@@ -152,6 +152,10 @@
             <label>投資組合波動度 (標準差 %)</label>
             <input type="number" id="volatility" value="12.0" step="0.1" onchange="calculate()">
         </div>
+        <div class="input-group mc-input">
+            <label>蒙地卡羅目標年齡 (歲)</label>
+            <input type="number" id="mcTargetAge" value="80" min="40" max="110" onchange="calculate()">
+        </div>
         
         <button id="btnMC" class="btn-mc" onclick="runMonteCarlo()">執行蒙地卡羅模擬<br><span style="font-size:0.8rem; font-weight:normal;">(10,000次亂數運算)</span></button>
     </aside>
@@ -279,7 +283,8 @@
             const currentAge = parseInt(document.getElementById('currentAge').value);
             const retireAge = parseInt(document.getElementById('retireAge').value);
             const pensionStartAge = parseInt(document.getElementById('pensionStartAge').value);
-            const endAge = 110;
+            const mcTargetAge = parseInt(document.getElementById('mcTargetAge').value); // 取得目標年齡
+            
             const initialAssets = parseFloat(document.getElementById('initialAssets').value);
             const annualSavings = parseFloat(document.getElementById('annualSavings').value);
             const annualExpenses = parseFloat(document.getElementById('annualExpenses').value);
@@ -295,7 +300,8 @@
                 let balance = initialAssets;
                 let isBankrupt = false;
 
-                for (let age = currentAge; age <= endAge; age++) {
+                // 迴圈改為只模擬到設定的「蒙地卡羅目標年齡」
+                for (let age = currentAge; age <= mcTargetAge; age++) {
                     let yearsFromNow = age - currentAge;
                     let infFactor = Math.pow(1 + inflationRate, yearsFromNow);
                     
@@ -327,10 +333,11 @@
 
                     if (balance < 0) {
                         isBankrupt = true;
-                        break; // 提早破產，結束這個迴圈
+                        break; // 在目標年齡前破產，提早結束這個迴圈
                     }
                 }
 
+                // 若跑到目標年齡仍未破產，則計為成功
                 if (!isBankrupt) {
                     successCount++;
                 }
