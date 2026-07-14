@@ -12,6 +12,7 @@
             --success: #16a34a;
             --warning: #ca8a04;
             --danger: #dc2626;
+            --mc-color: #8b5cf6; /* 蒙地卡羅專屬紫色 */
             --bg-color: #f8fafc;
             --card-bg: #ffffff;
             --text-main: #1e293b;
@@ -26,12 +27,19 @@
         
         /* Sidebar / Inputs */
         .sidebar { width: 320px; background: var(--card-bg); padding: 20px; border-right: 1px solid var(--border); overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10; }
-        .sidebar h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--primary-dark); border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
+        .sidebar h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--primary-dark); border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 20px; }
+        .sidebar h2:first-child { margin-top: 0; }
         .input-group { margin-bottom: 12px; }
         .input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--text-muted); }
         .input-group input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.95rem; }
         .input-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
-        .highlight-input label { color: #d97706; } /* 標註新增的參數 */
+        
+        .highlight-input label { color: #d97706; }
+        .mc-input label { color: var(--mc-color); }
+
+        .btn-mc { background: var(--mc-color); color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; margin-top: 15px; font-size: 1rem; box-shadow: 0 2px 4px rgba(139,92,246,0.3); }
+        .btn-mc:hover { background: #7c3aed; }
+        .btn-mc:disabled { background: #c4b5fd; cursor: not-allowed; }
         
         /* Main Content */
         .main-content { flex: 1; padding: 20px; overflow-y: auto; }
@@ -41,13 +49,15 @@
         .btn-print:hover { background: var(--primary-dark); }
 
         /* Dashboard Metrics */
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .metric-card { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
-        .metric-card h3 { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }
+        .metric-card h3 { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; }
         .metric-card .value { font-size: 1.5rem; font-weight: bold; margin-top: 5px; }
+        
         .metric-card.success { border-left-color: var(--success); }
         .metric-card.warning { border-left-color: var(--warning); }
         .metric-card.danger { border-left-color: var(--danger); }
+        .metric-card.mc-card { border-left-color: var(--mc-color); background-color: #faf5ff; }
 
         /* Charts Grid */
         .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
@@ -65,7 +75,7 @@
         /* Print Styles */
         @media print {
             .sidebar { display: none; }
-            .btn-print { display: none; }
+            .btn-print, .btn-mc { display: none; }
             .container { display: block; }
             .main-content { padding: 0; }
             .charts-grid { grid-template-columns: 1fr; page-break-inside: avoid; }
@@ -138,6 +148,12 @@
             <label>最差情境報酬率 (%)</label>
             <input type="number" id="rateWorst" value="3.0" step="0.1" onchange="calculate()">
         </div>
+        <div class="input-group mc-input">
+            <label>投資組合波動度 (標準差 %)</label>
+            <input type="number" id="volatility" value="12.0" step="0.1" onchange="calculate()">
+        </div>
+        
+        <button id="btnMC" class="btn-mc" onclick="runMonteCarlo()">執行蒙地卡羅模擬<br><span style="font-size:0.8rem; font-weight:normal;">(10,000次亂數運算)</span></button>
     </aside>
 
     <!-- Main Dashboard -->
@@ -149,20 +165,24 @@
 
         <!-- Metrics -->
         <div class="metrics-grid">
+            <div class="metric-card mc-card">
+                <h3>蒙地卡羅成功率</h3>
+                <div class="value" id="valMonteCarlo" style="color: var(--mc-color);">未計算</div>
+            </div>
             <div class="metric-card">
-                <h3>退休時預估資產 (一般)</h3>
+                <h3>退休時預估資產(一般)</h3>
                 <div class="value" id="valRetireAssets">0 萬</div>
             </div>
             <div class="metric-card success">
-                <h3>最佳情境 (7%) 破產年齡</h3>
+                <h3>最佳(7%)破產年齡</h3>
                 <div class="value" id="valBankruptBest">無</div>
             </div>
             <div class="metric-card warning">
-                <h3>一般情境 (5%) 破產年齡</h3>
+                <h3>一般(5%)破產年齡</h3>
                 <div class="value" id="valBankruptNormal">無</div>
             </div>
             <div class="metric-card danger">
-                <h3>最差情境 (3%) 破產年齡</h3>
+                <h3>最差(3%)破產年齡</h3>
                 <div class="value" id="valBankruptWorst">無</div>
             </div>
         </div>
@@ -231,11 +251,115 @@
         return expenses;
     }
 
+    // Box-Muller 轉換：產生符合常態分配的隨機數
+    function randomNormal(mean, stdDev) {
+        let u1 = 0, u2 = 0;
+        while (u1 === 0) u1 = Math.random(); 
+        while (u2 === 0) u2 = Math.random();
+        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        return z0 * stdDev + mean;
+    }
+
+    // 蒙地卡羅模擬函數 (獨立運作，不即時更新)
+    function runMonteCarlo() {
+        const btn = document.getElementById('btnMC');
+        const display = document.getElementById('valMonteCarlo');
+        
+        btn.disabled = true;
+        btn.innerHTML = '計算中...<br><span style="font-size:0.8rem; font-weight:normal;">請稍候</span>';
+        display.innerText = '運算中...';
+        display.style.color = 'var(--text-muted)';
+
+        // 使用 setTimeout 讓瀏覽器有時間更新 UI 按鈕狀態，再開始大量運算
+        setTimeout(() => {
+            const iterations = 10000; // 模擬 10,000 次
+            let successCount = 0;
+
+            // 取得當前參數
+            const currentAge = parseInt(document.getElementById('currentAge').value);
+            const retireAge = parseInt(document.getElementById('retireAge').value);
+            const pensionStartAge = parseInt(document.getElementById('pensionStartAge').value);
+            const endAge = 110;
+            const initialAssets = parseFloat(document.getElementById('initialAssets').value);
+            const annualSavings = parseFloat(document.getElementById('annualSavings').value);
+            const annualExpenses = parseFloat(document.getElementById('annualExpenses').value);
+            const annualPension = parseFloat(document.getElementById('annualPension').value);
+            const largeExpenses = parseLargeExpenses(document.getElementById('largeExpenses').value);
+            const inflationRate = parseFloat(document.getElementById('inflationRate').value) / 100;
+            
+            // 蒙地卡羅使用「一般情境」作為平均預期報酬，加上使用者設定的標準差
+            const meanReturn = parseFloat(document.getElementById('rateNormal').value) / 100;
+            const volatility = parseFloat(document.getElementById('volatility').value) / 100;
+
+            for (let i = 0; i < iterations; i++) {
+                let balance = initialAssets;
+                let isBankrupt = false;
+
+                for (let age = currentAge; age <= endAge; age++) {
+                    let yearsFromNow = age - currentAge;
+                    let infFactor = Math.pow(1 + inflationRate, yearsFromNow);
+                    
+                    let isRetired = age >= retireAge;
+                    let isPensionActive = age >= pensionStartAge;
+                    
+                    let rawIncome = 0;
+                    if (!isRetired) rawIncome = annualSavings;
+                    else if (isPensionActive) rawIncome = annualPension;
+
+                    let incomeReal = rawIncome * infFactor; 
+                    let rawExpense = isRetired ? annualExpenses : 0; 
+                    let expenseReal = rawExpense * infFactor;
+                    let extraExpense = (largeExpenses[age] || 0) * infFactor;
+                    let totalExpense = expenseReal + extraExpense;
+                    
+                    let netCashFlow = incomeReal - totalExpense;
+
+                    // 產生當年度的隨機報酬率
+                    let randomReturnRate = randomNormal(meanReturn, volatility);
+                    
+                    // 計算投資報酬與新餘額
+                    if (balance > 0) {
+                        let invReturn = balance * randomReturnRate;
+                        balance = balance + netCashFlow + invReturn;
+                    } else {
+                        balance = balance + netCashFlow;
+                    }
+
+                    if (balance < 0) {
+                        isBankrupt = true;
+                        break; // 提早破產，結束這個迴圈
+                    }
+                }
+
+                if (!isBankrupt) {
+                    successCount++;
+                }
+            }
+
+            // 計算成功率並更新 UI
+            const successRate = ((successCount / iterations) * 100).toFixed(1);
+            display.innerText = successRate + ' %';
+            
+            if (successRate >= 90) display.style.color = 'var(--success)';
+            else if (successRate >= 70) display.style.color = 'var(--warning)';
+            else display.style.color = 'var(--danger)';
+
+            btn.disabled = false;
+            btn.innerHTML = '執行蒙地卡羅模擬<br><span style="font-size:0.8rem; font-weight:normal;">(10,000次亂數運算)</span>';
+        }, 50); // 延遲 50 毫秒確保 UI 刷新
+    }
+
+    // 主計算引擎 (即時更新用)
     function calculate() {
+        // 重置蒙地卡羅狀態 (提示使用者參數已改變，需重新跑模擬)
+        const mcDisplay = document.getElementById('valMonteCarlo');
+        mcDisplay.innerText = "請重新計算";
+        mcDisplay.style.color = "var(--text-muted)";
+
         // 1. 取得輸入參數
         const currentAge = parseInt(document.getElementById('currentAge').value);
         const retireAge = parseInt(document.getElementById('retireAge').value);
-        const pensionStartAge = parseInt(document.getElementById('pensionStartAge').value); // 新增變數
+        const pensionStartAge = parseInt(document.getElementById('pensionStartAge').value);
         const endAge = 110;
         
         const initialAssets = parseFloat(document.getElementById('initialAssets').value);
@@ -264,40 +388,30 @@
         let cumulativeReturns = 0;
         let compSavingsData = [], compReturnsData = [];
 
-        // 2. 核心模擬引擎 (Excel 公式轉換)
+        // 2. 核心模擬引擎 (確定性模型)
         for (let age = currentAge; age <= endAge; age++) {
             let yearsFromNow = age - currentAge;
             let infFactor = Math.pow(1 + inflationRate, yearsFromNow);
             
-            // 判斷狀態
             let isRetired = age >= retireAge;
-            let isPensionActive = age >= pensionStartAge; // 是否開始領年金
+            let isPensionActive = age >= pensionStartAge; 
             
-            // 收入計算 (判斷是否在空窗期)
             let rawIncome = 0;
             if (!isRetired) {
-                rawIncome = annualSavings; // 尚未退休，繼續儲蓄投入
+                rawIncome = annualSavings; 
             } else if (isPensionActive) {
-                rawIncome = annualPension; // 已退休，且達到給付年齡
+                rawIncome = annualPension; 
             } 
-            // 若 isRetired == true 但 isPensionActive == false，rawIncome 維持為 0 (空窗期)
 
-            // 收入與支出經通膨調整
             let incomeReal = rawIncome * infFactor; 
-            
             let rawExpense = isRetired ? annualExpenses : 0; 
             let expenseReal = rawExpense * infFactor;
-            
-            // 單筆大額支出 
             let extraExpense = (largeExpenses[age] || 0) * infFactor;
             let totalExpense = expenseReal + extraExpense;
             
             let netCashFlow = incomeReal - totalExpense;
-
-            // 紀錄一般情境初值
             let startNormal = balNormal;
 
-            // 計算三種情境的當年投資報酬與期末資產
             // 最佳情境
             if (balBest > 0) {
                 let returnBest = balBest * rateBest;
@@ -323,14 +437,11 @@
                 if (balWorst < 0) balWorst = 0;
             } else { balWorst = 0; }
 
-            // 紀錄退休當下的資產 (一般情境)
             if (age === retireAge) assetsAtRetirement = balNormal;
 
-            // 累積數據 (一般情境用作圖表)
             if (age < retireAge) { cumulativeSavings += incomeReal; }
             cumulativeReturns += returnNormal;
 
-            // 存入陣列供圖表使用
             labels.push(age);
             dataBest.push(Math.round(balBest));
             dataNormal.push(Math.round(balNormal));
@@ -342,7 +453,6 @@
             compSavingsData.push(Math.round(cumulativeSavings));
             compReturnsData.push(Math.round(cumulativeReturns));
 
-            // 建立 Data Table (僅列出一般情境)
             tableHTML += `
                 <tr>
                     <td class="text-left">${age}</td>
@@ -381,17 +491,15 @@
             { label: '原始設定花費(名目)', data: dataInflationImpact, borderColor: '#94a3b8', borderDash: [5, 5], backgroundColor: 'transparent' }
         ], '通貨膨脹對購買力侵蝕影響');
 
-        // 資產組成 (本金投入 vs 投資利得)
         renderChart('chartAssetComposition', 'line', labels, [
             { label: '累計投入本金', data: compSavingsData, borderColor: '#6366f1', fill: true, backgroundColor: 'rgba(99,102,241,0.2)' },
             { label: '累計投資利得', data: compReturnsData, borderColor: '#10b981', fill: true, backgroundColor: 'rgba(16,185,129,0.2)' }
         ], '資產成長來源分析 (一般情境)');
 
-        // 花費結構圓餅圖 (退休後年均)
         const avgBasic = annualExpenses;
         let totalLarge = 0;
         for(let key in largeExpenses) totalLarge += largeExpenses[key];
-        const avgLarge = totalLarge / (endAge - retireAge || 1); // 攤提到退休後年份
+        const avgLarge = totalLarge / (endAge - retireAge || 1); 
         renderPieChart('chartExpenseBreakdown', ['基本生活開銷', '大額支出攤提'], [avgBasic, avgLarge], '退休後平均花費結構 (未計通膨)');
     }
 
