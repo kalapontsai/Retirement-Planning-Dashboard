@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專業版退休財務規劃 Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #16a34a;
+            --warning: #ca8a04;
+            --danger: #dc2626;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; }
+        
+        .container { display: flex; min-height: 100vh; }
+        
+        /* Sidebar / Inputs */
+        .sidebar { width: 320px; background: var(--card-bg); padding: 20px; border-right: 1px solid var(--border); overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+        .sidebar h2 { font-size: 1.2rem; margin-bottom: 15px; color: var(--primary-dark); border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--text-muted); }
+        .input-group input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.95rem; }
+        .input-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+        .highlight-input label { color: #d97706; } /* 標註新增的參數 */
+        
+        /* Main Content */
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header h1 { font-size: 1.8rem; color: var(--text-main); }
+        .btn-print { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        .btn-print:hover { background: var(--primary-dark); }
+
+        /* Dashboard Metrics */
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .metric-card { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
+        .metric-card h3 { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; }
+        .metric-card .value { font-size: 1.5rem; font-weight: bold; margin-top: 5px; }
+        .metric-card.success { border-left-color: var(--success); }
+        .metric-card.warning { border-left-color: var(--warning); }
+        .metric-card.danger { border-left-color: var(--danger); }
+
+        /* Charts Grid */
+        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
+        .chart-container { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .chart-container.full-width { grid-column: span 2; }
+        
+        /* Data Table */
+        .table-container { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto; margin-bottom: 40px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: right; }
+        th, td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg-color); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+        tr:hover { background-color: #f1f5f9; }
+        .text-left { text-align: left; }
+
+        /* Print Styles */
+        @media print {
+            .sidebar { display: none; }
+            .btn-print { display: none; }
+            .container { display: block; }
+            .main-content { padding: 0; }
+            .charts-grid { grid-template-columns: 1fr; page-break-inside: avoid; }
+            .chart-container { page-break-inside: avoid; margin-bottom: 20px; box-shadow: none; border: 1px solid #ccc; }
+            .metric-card { box-shadow: none; border: 1px solid #ccc; }
+            body { background: white; }
+            .table-container { page-break-before: always; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Parameters Sidebar -->
+    <aside class="sidebar">
+        <h2>1. 基本參數</h2>
+        <div class="input-group">
+            <label>目前年齡 (歲)</label>
+            <input type="number" id="currentAge" value="35" min="18" max="80" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>預計退休年齡 (歲)</label>
+            <input type="number" id="retireAge" value="55" min="40" max="100" onchange="calculate()">
+        </div>
+        <div class="input-group highlight-input">
+            <label>退休年金給付年齡 (歲)</label>
+            <input type="number" id="pensionStartAge" value="65" min="40" max="100" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>模擬至年齡 (歲)</label>
+            <input type="number" id="endAge" value="110" readonly>
+        </div>
+
+        <h2>2. 資產與收支 (萬元)</h2>
+        <div class="input-group">
+            <label>目前已備資產 (萬)</label>
+            <input type="number" id="initialAssets" value="300" step="10" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>退休前每年投入 (萬)</label>
+            <input type="number" id="annualSavings" value="36" step="1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>退休後基本年花費 (萬/現值)</label>
+            <input type="number" id="annualExpenses" value="80" step="1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>退休後預估年金收入 (萬/現值)</label>
+            <input type="number" id="annualPension" value="25" step="1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>單次大額支出 (萬) [格式: 年齡,金額]</label>
+            <input type="text" id="largeExpenses" value="65,100; 75,50" onchange="calculate()" placeholder="例: 65,100; 75,50">
+        </div>
+
+        <h2>3. 經濟環境假設 (%)</h2>
+        <div class="input-group">
+            <label>通貨膨脹率 (%)</label>
+            <input type="number" id="inflationRate" value="2.0" step="0.1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>最佳情境報酬率 (%)</label>
+            <input type="number" id="rateBest" value="7.0" step="0.1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>一般情境報酬率 (%)</label>
+            <input type="number" id="rateNormal" value="5.0" step="0.1" onchange="calculate()">
+        </div>
+        <div class="input-group">
+            <label>最差情境報酬率 (%)</label>
+            <input type="number" id="rateWorst" value="3.0" step="0.1" onchange="calculate()">
+        </div>
+    </aside>
+
+    <!-- Main Dashboard -->
+    <main class="main-content">
+        <div class="header">
+            <h1>專業退休財務模擬 Dashboard</h1>
+            <button class="btn-print" onclick="window.print()">列印 / 輸出 PDF</button>
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h3>退休時預估資產 (一般)</h3>
+                <div class="value" id="valRetireAssets">0 萬</div>
+            </div>
+            <div class="metric-card success">
+                <h3>最佳情境 (7%) 破產年齡</h3>
+                <div class="value" id="valBankruptBest">無</div>
+            </div>
+            <div class="metric-card warning">
+                <h3>一般情境 (5%) 破產年齡</h3>
+                <div class="value" id="valBankruptNormal">無</div>
+            </div>
+            <div class="metric-card danger">
+                <h3>最差情境 (3%) 破產年齡</h3>
+                <div class="value" id="valBankruptWorst">無</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-container full-width">
+                <canvas id="chartNetWorth"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartCashFlow"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartInflation"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartExpenseBreakdown"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartAssetComposition"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-container">
+            <h2 style="margin-bottom: 10px; color: var(--text-muted);">年度現金流與資產明細 (一般情境 5%)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="text-left">年齡</th>
+                        <th>通膨係數</th>
+                        <th>當年總收入 (萬)</th>
+                        <th>當年總支出 (萬)</th>
+                        <th>淨現金流 (萬)</th>
+                        <th>期初資產 (萬)</th>
+                        <th>投資報酬 (萬)</th>
+                        <th>期末資產 (萬)</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Javascript generates rows here -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<script>
+    // Chart instances mapping
+    let charts = {};
+
+    function parseLargeExpenses(inputStr) {
+        let expenses = {};
+        if (!inputStr) return expenses;
+        let pairs = inputStr.split(';');
+        pairs.forEach(p => {
+            let parts = p.split(',');
+            if (parts.length === 2) {
+                let age = parseInt(parts[0].trim());
+                let amount = parseFloat(parts[1].trim());
+                if (!isNaN(age) && !isNaN(amount)) {
+                    expenses[age] = (expenses[age] || 0) + amount;
+                }
+            }
+        });
+        return expenses;
+    }
+
+    function calculate() {
+        // 1. 取得輸入參數
+        const currentAge = parseInt(document.getElementById('currentAge').value);
+        const retireAge = parseInt(document.getElementById('retireAge').value);
+        const pensionStartAge = parseInt(document.getElementById('pensionStartAge').value); // 新增變數
+        const endAge = 110;
+        
+        const initialAssets = parseFloat(document.getElementById('initialAssets').value);
+        const annualSavings = parseFloat(document.getElementById('annualSavings').value);
+        const annualExpenses = parseFloat(document.getElementById('annualExpenses').value);
+        const annualPension = parseFloat(document.getElementById('annualPension').value);
+        const largeExpenses = parseLargeExpenses(document.getElementById('largeExpenses').value);
+        
+        const inflationRate = parseFloat(document.getElementById('inflationRate').value) / 100;
+        const rateBest = parseFloat(document.getElementById('rateBest').value) / 100;
+        const rateNormal = parseFloat(document.getElementById('rateNormal').value) / 100;
+        const rateWorst = parseFloat(document.getElementById('rateWorst').value) / 100;
+
+        // 資料陣列準備
+        let labels = [];
+        let dataBest = [], dataNormal = [], dataWorst = [];
+        let dataIncome = [], dataExpense = [], dataInflationImpact = [];
+        let tableHTML = '';
+        
+        // 狀態變數
+        let balBest = initialAssets, balNormal = initialAssets, balWorst = initialAssets;
+        let bankruptBest = '安全 (>110歲)', bankruptNormal = '安全 (>110歲)', bankruptWorst = '安全 (>110歲)';
+        let assetsAtRetirement = 0;
+        
+        let cumulativeSavings = initialAssets;
+        let cumulativeReturns = 0;
+        let compSavingsData = [], compReturnsData = [];
+
+        // 2. 核心模擬引擎 (Excel 公式轉換)
+        for (let age = currentAge; age <= endAge; age++) {
+            let yearsFromNow = age - currentAge;
+            let infFactor = Math.pow(1 + inflationRate, yearsFromNow);
+            
+            // 判斷狀態
+            let isRetired = age >= retireAge;
+            let isPensionActive = age >= pensionStartAge; // 是否開始領年金
+            
+            // 收入計算 (判斷是否在空窗期)
+            let rawIncome = 0;
+            if (!isRetired) {
+                rawIncome = annualSavings; // 尚未退休，繼續儲蓄投入
+            } else if (isPensionActive) {
+                rawIncome = annualPension; // 已退休，且達到給付年齡
+            } 
+            // 若 isRetired == true 但 isPensionActive == false，rawIncome 維持為 0 (空窗期)
+
+            // 收入與支出經通膨調整
+            let incomeReal = rawIncome * infFactor; 
+            
+            let rawExpense = isRetired ? annualExpenses : 0; 
+            let expenseReal = rawExpense * infFactor;
+            
+            // 單筆大額支出 
+            let extraExpense = (largeExpenses[age] || 0) * infFactor;
+            let totalExpense = expenseReal + extraExpense;
+            
+            let netCashFlow = incomeReal - totalExpense;
+
+            // 紀錄一般情境初值
+            let startNormal = balNormal;
+
+            // 計算三種情境的當年投資報酬與期末資產
+            // 最佳情境
+            if (balBest > 0) {
+                let returnBest = balBest * rateBest;
+                balBest = balBest + netCashFlow + returnBest;
+                if (balBest < 0 && bankruptBest === '安全 (>110歲)') bankruptBest = age + ' 歲';
+                if (balBest < 0) balBest = 0;
+            } else { balBest = 0; }
+
+            // 一般情境
+            let returnNormal = 0;
+            if (balNormal > 0) {
+                returnNormal = balNormal * rateNormal;
+                balNormal = balNormal + netCashFlow + returnNormal;
+                if (balNormal < 0 && bankruptNormal === '安全 (>110歲)') bankruptNormal = age + ' 歲';
+                if (balNormal < 0) balNormal = 0;
+            } else { balNormal = 0; }
+
+            // 最差情境
+            if (balWorst > 0) {
+                let returnWorst = balWorst * rateWorst;
+                balWorst = balWorst + netCashFlow + returnWorst;
+                if (balWorst < 0 && bankruptWorst === '安全 (>110歲)') bankruptWorst = age + ' 歲';
+                if (balWorst < 0) balWorst = 0;
+            } else { balWorst = 0; }
+
+            // 紀錄退休當下的資產 (一般情境)
+            if (age === retireAge) assetsAtRetirement = balNormal;
+
+            // 累積數據 (一般情境用作圖表)
+            if (age < retireAge) { cumulativeSavings += incomeReal; }
+            cumulativeReturns += returnNormal;
+
+            // 存入陣列供圖表使用
+            labels.push(age);
+            dataBest.push(Math.round(balBest));
+            dataNormal.push(Math.round(balNormal));
+            dataWorst.push(Math.round(balWorst));
+            dataIncome.push(Math.round(incomeReal));
+            dataExpense.push(Math.round(totalExpense));
+            dataInflationImpact.push(Math.round(isRetired ? annualExpenses : 0)); 
+            
+            compSavingsData.push(Math.round(cumulativeSavings));
+            compReturnsData.push(Math.round(cumulativeReturns));
+
+            // 建立 Data Table (僅列出一般情境)
+            tableHTML += `
+                <tr>
+                    <td class="text-left">${age}</td>
+                    <td>${infFactor.toFixed(2)}x</td>
+                    <td>${Math.round(incomeReal).toLocaleString()}</td>
+                    <td>${Math.round(totalExpense).toLocaleString()}</td>
+                    <td style="color: ${netCashFlow >= 0 ? 'var(--success)' : 'var(--danger)'}">${Math.round(netCashFlow).toLocaleString()}</td>
+                    <td>${Math.round(startNormal).toLocaleString()}</td>
+                    <td>${Math.round(returnNormal).toLocaleString()}</td>
+                    <td style="font-weight:bold">${Math.round(balNormal).toLocaleString()}</td>
+                </tr>
+            `;
+        }
+
+        // 3. 更新 Dashboard 數字
+        document.getElementById('valRetireAssets').innerText = Math.round(assetsAtRetirement).toLocaleString() + ' 萬';
+        document.getElementById('valBankruptBest').innerText = bankruptBest;
+        document.getElementById('valBankruptNormal').innerText = bankruptNormal;
+        document.getElementById('valBankruptWorst').innerText = bankruptWorst;
+        document.getElementById('tableBody').innerHTML = tableHTML;
+
+        // 4. 更新圖表
+        renderChart('chartNetWorth', 'line', labels, [
+            { label: '最佳 (7%)', data: dataBest, borderColor: '#16a34a', backgroundColor: 'transparent' },
+            { label: '一般 (5%)', data: dataNormal, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true },
+            { label: '最差 (3%)', data: dataWorst, borderColor: '#dc2626', backgroundColor: 'transparent' }
+        ], '長期資產走勢模擬 (三情境對比)');
+
+        renderChart('chartCashFlow', 'bar', labels, [
+            { label: '現金流入', data: dataIncome, backgroundColor: '#3b82f6' },
+            { label: '現金流出', data: dataExpense, backgroundColor: '#ef4444' }
+        ], '年度現金流動狀況');
+
+        renderChart('chartInflation', 'line', labels, [
+            { label: '通膨後實際花費', data: dataExpense, borderColor: '#f59e0b', backgroundColor: 'transparent' },
+            { label: '原始設定花費(名目)', data: dataInflationImpact, borderColor: '#94a3b8', borderDash: [5, 5], backgroundColor: 'transparent' }
+        ], '通貨膨脹對購買力侵蝕影響');
+
+        // 資產組成 (本金投入 vs 投資利得)
+        renderChart('chartAssetComposition', 'line', labels, [
+            { label: '累計投入本金', data: compSavingsData, borderColor: '#6366f1', fill: true, backgroundColor: 'rgba(99,102,241,0.2)' },
+            { label: '累計投資利得', data: compReturnsData, borderColor: '#10b981', fill: true, backgroundColor: 'rgba(16,185,129,0.2)' }
+        ], '資產成長來源分析 (一般情境)');
+
+        // 花費結構圓餅圖 (退休後年均)
+        const avgBasic = annualExpenses;
+        let totalLarge = 0;
+        for(let key in largeExpenses) totalLarge += largeExpenses[key];
+        const avgLarge = totalLarge / (endAge - retireAge || 1); // 攤提到退休後年份
+        renderPieChart('chartExpenseBreakdown', ['基本生活開銷', '大額支出攤提'], [avgBasic, avgLarge], '退休後平均花費結構 (未計通膨)');
+    }
+
+    function renderChart(canvasId, type, labels, datasets, title) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (charts[canvasId]) charts[canvasId].destroy();
+        charts[canvasId] = new Chart(ctx, {
+            type: type,
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: title, font: { size: 16 } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: type === 'line' || type === 'bar' ? {
+                    y: { title: { display: true, text: '金額 (萬元)' } }
+                } : {}
+            }
+        });
+    }
+
+    function renderPieChart(canvasId, labels, data, title) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        if (charts[canvasId]) charts[canvasId].destroy();
+        charts[canvasId] = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: ['#3b82f6', '#f59e0b', '#ef4444', '#10b981']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: title, font: { size: 16 } }
+                }
+            }
+        });
+    }
+
+    // 初始化執行
+    window.onload = calculate;
+</script>
+
+</body>
+</html>
